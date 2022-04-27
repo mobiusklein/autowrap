@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 import pdb
+import warnings
 
 __license__ = """
 
@@ -606,10 +607,41 @@ class CodeGenerator(object):
                             """ % r_class.wrap_hash[0], locals())
 
         if "wrap-buffer-protocol" in r_class.cpp_decl.annotations:
-            buffer_parts = r_class.cpp_decl.annotations['wrap-buffer-protocol'][0].split(",")
-            buffer_sourcer = buffer_parts[0]
-            buffer_type = buffer_parts[1]
-            buffer_sizer = buffer_parts[2]
+            buffer_protocol_block = r_class.cpp_decl.annotations['wrap-buffer-protocol']
+
+            buffer_sourcer = None
+            buffer_type = None
+            buffer_sizer = None
+            for token in buffer_protocol_block:
+                try:
+                    label, expr = map(str.strip, token.split(":", 1))
+                    if label == "source":
+                        buffer_sourcer = expr
+                    elif label == "type":
+                        buffer_type = expr
+                    elif label == "size":
+                        buffer_sizer = expr
+                    else:
+                        raise ValueError(
+                            "Could not match label {!r} to one of 'source', 'type' or 'size'".format(label))
+                except ValueError:
+                    if len(buffer_protocol_block) == 1:
+                        warnings.warn(
+                            "Using old comma separated notation for buffer protocol on {}".format(r_class.name))
+                        buffer_sourcer, buffer_type, buffer_sizer = token.split(",")
+                    else:
+                        raise ValueError(
+                            "Could not interpret {!r}".format(token)
+                        )
+
+            if buffer_sourcer is None:
+                raise ValueError("Buffer source expression is missing!")
+            if buffer_type is None:
+                warnings.warn("No buffer type specified for {}, assuming `unsigned char` for raw byte exports.".format(r_class.name))
+                buffer_type = 'unsigned char'
+            if buffer_sizer is None:
+                raise ValueError("Buffer size expression is missing!")
+
             buffer_code = {
                 "char": 'c',
                 "signed char": "b",
@@ -658,7 +690,13 @@ class CodeGenerator(object):
                                 |    def __releasebuffer__(self, Py_buffer *buffer):
                                 |        pass
                                 |
-                                """.format(**locals()))
+                                """.format(
+                                    buffer_sizer=buffer_sizer,
+                                    buffer_type=buffer_type,
+                                    buffer_code=buffer_code,
+                                    buffer_sourcer=buffer_sourcer
+                                )
+                            )
 
         self.class_pxd_codes[cname] = class_pxd_code
         out_codes[cname] = class_code

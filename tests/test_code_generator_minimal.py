@@ -177,7 +177,7 @@ def test_minimal():
     m3 = wrapped.Minimal([1, 2, 3])
     assert m3.compute(0) == 4
 
-    ### Different ways of wrapping a function: 
+    ### Different ways of wrapping a function:
     # all three call() methods (call, call2, call3) do exactly the same thing
     # and all modify the input argument. However, they are wrapped differently
     # in the pxd file:
